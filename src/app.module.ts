@@ -3,16 +3,17 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { IssuesModule } from './issues/issues.module';
 import { ConfigModule } from '@nestjs/config';
-import { CommitsModule } from './commits/commits.module';
+import { GithubModule } from './github/github.module';
+import { HttpService } from '@nestjs/axios';
 
 @Module({
   imports: [
-    IssuesModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    CommitsModule,
+    IssuesModule,
+    GithubModule,
   ],
   controllers: [AppController],
   providers: [AppService],
