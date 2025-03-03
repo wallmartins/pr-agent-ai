@@ -115,24 +115,4 @@ export class GithubService {
       })),
     };
   }
-
-  async createPullRequest(
-    user: string,
-    repo: string,
-    title: string,
-    head: string,
-    base: string,
-    body?: string,
-  ) {
-    const url = `${this.githubApiUrl}/repos/${user}/${repo}/pulls`;
-    const response = await firstValueFrom(
-      this.httpService.post(
-        url,
-        { title, head, base, body },
-        { headers: this.getHeaders() },
-      ),
-    );
-
-    return response.data;
-  }
 }

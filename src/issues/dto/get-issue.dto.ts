@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 class JiraIssueFieldsDto {
   @ApiProperty()
@@ -45,4 +45,23 @@ export class GetUserIssuesQueryDto {
   @IsEmail()
   @IsNotEmpty()
   email: string;
+}
+
+export class GetIssues {
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  key: string;
+
+  @IsObject()
+  fields: {
+    summary: string;
+    status: string;
+    created: string;
+    updated: string;
+    description: string;
+  };
 }
