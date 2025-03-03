@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { GetUserIssuesDto } from './dto/get-issue.dto';
+import { GetIssues, GetUserIssuesDto } from './dto/get-issue.dto';
 import { extractTextFromADF } from 'src/utils/formatDescriptionIssue';
 
 @Injectable()
@@ -12,20 +12,21 @@ export class IssuesService {
     private readonly httpService: HttpService,
   ) {}
 
+  apiToken = this.configService.get<string>('JIRA_API_TOKEN');
+  domain = this.configService.get<string>('JIRA_DOMAIN');
+
+  url = `https://${this.domain}/rest/api/3/`;
+
   private async getJiraUserId(userEmail: string): Promise<string> {
-    const apiToken = this.configService.get<string>('JIRA_API_TOKEN');
-    const domain = this.configService.get<string>('JIRA_DOMAIN');
-
-    const url = `https://${domain}/rest/api/3/myself`;
-
     const authHeader = {
       Authorization:
-        'Basic ' + Buffer.from(`${userEmail}:${apiToken}`).toString('base64'),
+        'Basic ' +
+        Buffer.from(`${userEmail}:${this.apiToken}`).toString('base64'),
       Accept: 'application/json',
     };
 
     const response = await firstValueFrom(
-      this.httpService.get(url, { headers: authHeader }),
+      this.httpService.get(`${this.url}/myself`, { headers: authHeader }),
     );
 
     if (!response.data) {
@@ -36,24 +37,21 @@ export class IssuesService {
   }
 
   async getUserIssues(userEmail: string) {
-    const apiToken = this.configService.get<string>('JIRA_API_TOKEN');
-    const domain = this.configService.get<string>('JIRA_DOMAIN');
     const userId = await this.getJiraUserId(userEmail);
-
-    const url = `https://${domain}/rest/api/3/search`;
 
     const authHeader = {
       Authorization:
-        'Basic ' + Buffer.from(`${userEmail}:${apiToken}`).toString('base64'),
+        'Basic ' +
+        Buffer.from(`${userEmail}:${this.apiToken}`).toString('base64'),
       Accept: 'application/json',
     };
 
     const response = await firstValueFrom(
-      this.httpService.get(url, {
+      this.httpService.get(`${this.url}/search`, {
         headers: authHeader,
         params: {
           jql: `assignee=${userId}`,
-          fields: 'summary,status,created,updated,description',
+          fields: 'key,summary',
         },
       }),
     );
@@ -64,21 +62,65 @@ export class IssuesService {
 
     const { data } = response;
 
-    const mappedData: GetUserIssuesDto = {
-      total: data.total,
-      issues: data.issues.map((issue: any) => ({
-        id: issue.id,
-        key: issue.key,
-        fields: {
-          summary: issue.fields.summary,
-          status: issue.fields.status.name,
-          created: issue.fields.created,
-          updated: issue.fields.updated,
-          description: extractTextFromADF(issue.fields.description),
-        },
-      })),
+    return data.issues.map((issue: any) => ({
+      key: issue.key,
+      summary: issue.fields.summary,
+    }));
+  }
+
+  async getIssues(
+    taskIds: string[],
+    userEmail: string,
+  ): Promise<GetUserIssuesDto> {
+    const userId = await this.getJiraUserId(userEmail);
+
+    const authHeader = {
+      Authorization:
+        'Basic ' +
+        Buffer.from(`${userEmail}:${this.apiToken}`).toString('base64'),
+      Accept: 'application/json',
     };
 
-    return mappedData;
+    const issues: GetIssues[] = [];
+
+    for (const taskId of taskIds) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get(`${this.url}/issue/${taskId}`, {
+            headers: authHeader,
+            params: {
+              jql: `assignee=${userId}`,
+              fields: 'summary,status,created,updated,description',
+            },
+          }),
+        );
+
+        if (!response.data) {
+          throw new Error(`Failed to fetch issue ${taskId}`);
+        }
+
+        const issue = response.data;
+
+        issues.push({
+          id: issue.id,
+          key: issue.key,
+          fields: {
+            summary: issue.fields.summary,
+            status: issue.fields.status.name,
+            created: issue.fields.created,
+            updated: issue.fields.updated,
+            description: extractTextFromADF(issue.fields.description),
+          },
+        });
+      } catch (error) {
+        console.error(`Erro ao buscar o card ${taskId}:`, error);
+        throw new Error(`Falha ao buscar o card ${taskId}`);
+      }
+    }
+
+    return {
+      total: issues.length,
+      issues,
+    };
   }
 }

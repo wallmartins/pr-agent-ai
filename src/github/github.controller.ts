@@ -1,9 +1,13 @@
 import { Controller, Get, Query, Post, Body } from '@nestjs/common';
 import { GithubService } from './github.service';
+import { PRService } from './pr.service';
 
 @Controller('github')
 export class GithubController {
-  constructor(private readonly githubService: GithubService) {}
+  constructor(
+    private readonly githubService: GithubService,
+    private readonly prService: PRService,
+  ) {}
 
   @Get('branches')
   async getBranches(
@@ -24,22 +28,22 @@ export class GithubController {
     return this.githubService.getCommits(user, repo, branch, username);
   }
 
-  @Post('pull-request')
+  @Post('pr')
   async createPullRequest(
-    @Body('user') user: string,
+    @Body('owner') owner: string,
+    @Body('username') username: string,
+    @Body('userEmail') userEmail: string,
+    @Body('branch') branch: string,
     @Body('repo') repo: string,
-    @Body('title') title: string,
-    @Body('head') head: string,
-    @Body('base') base: string,
-    @Body('body') body?: string,
+    @Body('issues') issues: string[],
   ) {
-    return this.githubService.createPullRequest(
-      user,
+    return this.prService.createPR(
+      owner,
+      username,
+      userEmail,
+      branch,
       repo,
-      title,
-      head,
-      base,
-      body,
+      issues,
     );
   }
 }
