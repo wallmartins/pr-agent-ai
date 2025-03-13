@@ -1,6 +1,7 @@
-import { Controller, Get, Query, Post, Body } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body, Res } from '@nestjs/common';
 import { GithubService } from './github.service';
 import { PRService } from './pr.service';
+import { Response } from 'express';
 
 @Controller('github')
 export class GithubController {
@@ -31,19 +32,40 @@ export class GithubController {
   @Post('pr')
   async createPullRequest(
     @Body('owner') owner: string,
+    @Body('repo') repo: string,
+    @Body('branch') branch: string,
+    @Body('description') description: string,
+  ) {
+    return this.prService.createGitHubPR(owner, repo, branch, description);
+  }
+
+  @Post('pr/stream')
+  async streamPrDescription(
+    @Body('owner') owner: string,
     @Body('username') username: string,
     @Body('userEmail') userEmail: string,
     @Body('branch') branch: string,
     @Body('repo') repo: string,
     @Body('issues') issues: string[],
+    @Res() res: Response,
   ) {
-    return this.prService.createPR(
-      owner,
-      username,
-      userEmail,
-      branch,
-      repo,
-      issues,
-    );
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      await this.prService.createPR(
+        owner,
+        username,
+        userEmail,
+        branch,
+        repo,
+        issues,
+        res,
+      );
+    } catch (error) {
+      console.error('Erro ao gerar a descrição do PR:', error);
+      res.status(500).end();
+    }
   }
 }

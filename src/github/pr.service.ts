@@ -5,6 +5,7 @@ import { IssuesService } from 'src/issues/issues.service';
 import { GithubService } from './github.service';
 import { OllamaService } from 'src/ollama/ollama.service';
 import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
 
 @Injectable()
 export class PRService {
@@ -25,6 +26,7 @@ export class PRService {
     branch: string,
     repo: string,
     issues: string[],
+    res: Response,
   ): Promise<void> {
     const jiraIssue = await this.jiraService.getIssues(issues, userEmail);
     const jiraDescription = jiraIssue.issues.map(
@@ -38,42 +40,39 @@ export class PRService {
       username,
     );
 
-    const prDescription = await this.ollamaService.analyzeTask(
-      jiraDescription,
-      commitsData,
-    );
-
-    await this.createGitHubPR(owner, repo, branch, prDescription);
+    await this.ollamaService.analyzeTask(jiraDescription, commitsData, res);
   }
 
-  private async createGitHubPR(
+  async createGitHubPR(
     owner: string,
     repo: string,
     branch: string,
     description: string,
   ): Promise<void> {
     try {
+      const url = `https://api.github.com/repos/${owner}/${repo}/pulls`;
+      const payload = {
+        title: `PR for ${branch}`,
+        head: branch,
+        base: 'main',
+        body: description,
+      };
+
+      const headers = {
+        Authorization: `Bearer ${this.configService.get<string>('GITHUB_API_TOKEN')}`,
+        Accept: 'application/vnd.github.v3+json',
+      };
+
       const response = await firstValueFrom(
-        this.httpService.post(
-          `https://api.github.com/repos/${owner}/${repo}/pulls`,
-          {
-            title: `PR for ${branch}`,
-            head: branch,
-            base: this.baseBranch,
-            body: description,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${this.configService.get<string>('GITHUB_API_TOKEN')}`,
-              Accept: 'application/vnd.github.v3+json',
-            },
-          },
-        ),
+        this.httpService.post(url, payload, { headers }),
       );
 
       console.log('PR criado com sucesso:', response.data);
     } catch (error) {
-      console.error('Erro ao criar o PR no GitHub:', error);
+      console.error(
+        'Erro ao criar o PR no GitHub:',
+        error.response?.data || error.message,
+      );
       throw new Error('Falha ao criar o PR no GitHub.');
     }
   }
